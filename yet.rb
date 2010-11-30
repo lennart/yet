@@ -2,7 +2,8 @@
 
 require 'rubygems'
 require 'osx/plist'
-require 'yajl'
+require 'couchrest'
+
 
 class Time
   def to_rfc3339
@@ -18,7 +19,7 @@ class Yet
   def json
     plist["Tracks"].map do |key, track|
       {
-        "id" => track["XID"] || track["Persistent ID"],
+        "_id" => track["XID"] || track["Persistent ID"],
         "title" => track["Name"],
         "artist" => track["Artist"],
         "track" => track["Track Number"],
@@ -28,10 +29,21 @@ class Yet
           "released" => Time.utc(track["Year"] || 1970).to_rfc3339
         },
         "tags" => [track["Genre"]].compact,
-        "url" => track["Location"],
+        "url" => URI.unescape(track["Location"].gsub(/\Afile:\/\/localhost/,"file://")),
         "added" => Time.new.to_rfc3339
         
       }
     end
+  end
+
+  def persist db
+    json.each {|d| 
+      doc = db.get(d["_id"])
+      if doc
+        db.save_doc doc.merge(d) 
+      else
+        db.save_doc d
+      end
+    }
   end
 end
